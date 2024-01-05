@@ -17,6 +17,8 @@
 
 
 # baseline: 3m02s
+# copy chunk 5k lines, 4 threads: 1m09s
 
-JAVA_OPTS="--enable-preview -Xmx1g -Xms1g"
+
+JAVA_OPTS="--enable-preview -Xmx4g -Xms4g"
 time java $JAVA_OPTS --class-path target/average-1.0.0-SNAPSHOT.jar com.juhanlol.CalculateAverage
