@@ -39,7 +39,7 @@ public class CalculateAverage {
         }
 
         var pool = Executors.newWorkStealingPool(NUM_THREADS);
-        var permits = new AtomicInteger(NUM_THREADS);
+        var permits = new AtomicInteger(NUM_THREADS * 2);
 
         var iter = Files.lines(Paths.get(FILE)).iterator();
 
