@@ -24,6 +24,7 @@ import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class CalculateAverage {
@@ -31,32 +32,52 @@ public class CalculateAverage {
     private static final String FILE = "./measurements.txt";
     private static final int BATCH_SIZE = 5000;
     private static final int NUM_THREADS = 4;
+    private static final int NUM_TASKS = NUM_THREADS * 2;
 
     public static void main(String[] args) throws IOException, InterruptedException {
+
         var aggrs = new ArrayList<HashMap<String, double[]>>(NUM_THREADS);
         for (int i = 0; i < NUM_THREADS; i++) {
             aggrs.add(new HashMap<>(1000));
         }
 
         var pool = Executors.newWorkStealingPool(NUM_THREADS);
-        var permits = new AtomicInteger(NUM_THREADS * 2);
+        var permits = new AtomicInteger(NUM_TASKS);
+
+        var buffers = new String[NUM_TASKS][BATCH_SIZE];
+        var bufferState = new AtomicBoolean[NUM_TASKS];
+        for (int i = 0; i < NUM_TASKS; i++) {
+            bufferState[i] = new AtomicBoolean(false);
+        }
 
         var iter = Files.lines(Paths.get(FILE)).iterator();
 
         while (iter.hasNext()) {
-            if (permits.get() > 0) {
-                var lines = new ArrayList<String>(BATCH_SIZE);
-                for (int i = 0; i < BATCH_SIZE; i++) {
-                    if (iter.hasNext()) {
-                        lines.add(iter.next());
+            if (permits.getAcquire() > 0) {
+                // find a used buffer
+                var bufferId = 0;
+                while (bufferState[bufferId].getAcquire()) {
+                    bufferId += 1;
+                    if (bufferId == NUM_TASKS) {
+                        bufferId = 0;
                     }
                 }
 
-                permits.decrementAndGet();
-                CompletableFuture.runAsync(new Task(lines, aggrs), pool)
-                        .whenComplete((__, ignored) -> {
-                            permits.incrementAndGet();
-                        });
+                var buffer = buffers[bufferId];
+                for (int i = 0; i < BATCH_SIZE; i++) {
+                    if (iter.hasNext()) {
+                        buffer[i] = iter.next();
+                    }
+                }
+
+                 final var bid = bufferId;
+                 permits.decrementAndGet();
+                 bufferState[bid].setRelease(true);
+                 CompletableFuture.runAsync(new Task(buffers[bid], aggrs), pool)
+                 .whenComplete((__, ignored) -> {
+                 bufferState[bid].setRelease(false);
+                 permits.incrementAndGet();
+                 });
             }
         }
 
@@ -103,10 +124,10 @@ public class CalculateAverage {
     }
 
     private static class Task implements Runnable {
-        private final ArrayList<String> lines;
+        private final String[] lines;
         private final ArrayList<HashMap<String, double[]>> aggrs;
 
-        Task(ArrayList<String> lines, ArrayList<HashMap<String, double[]>> aggrs) {
+        Task(String[] lines, ArrayList<HashMap<String, double[]>> aggrs) {
             this.lines = lines;
             this.aggrs = aggrs;
         }
