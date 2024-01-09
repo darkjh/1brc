@@ -20,6 +20,8 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import java.util.TreeMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.Executors;
@@ -70,22 +72,27 @@ public class CalculateAverage {
                     }
                 }
 
-                 final var bid = bufferId;
-                 permits.decrementAndGet();
-                 bufferState[bid].setRelease(true);
-                 CompletableFuture.runAsync(new Task(buffers[bid], aggrs), pool)
-                 .whenComplete((__, ignored) -> {
-                 bufferState[bid].setRelease(false);
-                 permits.incrementAndGet();
-                 });
+                final var bid = bufferId;
+                permits.decrementAndGet();
+                bufferState[bid].setRelease(true);
+                CompletableFuture.runAsync(new Task(buffers[bid], aggrs), pool)
+                        .whenComplete((__, ignored) -> {
+                            bufferState[bid].setRelease(false);
+                            permits.incrementAndGet();
+                        });
             }
         }
 
         pool.shutdown();
         pool.awaitTermination(1000000, TimeUnit.DAYS);
 
+        var result = aggregateAll(aggrs);
+        displayResult(result);
+    }
+
+    private static Map<String, double[]> aggregateAll(List<HashMap<String, double[]>> aggrs) {
         var all = aggrs.get(0);
-        for (int i = 1; i < NUM_THREADS; i++) {
+        for (int i = 1; i < aggrs.size(); i++) {
             for (var entry : aggrs.get(i).entrySet()) {
                 var s = entry.getKey();
                 all.compute(s, (_, v) -> {
@@ -100,8 +107,12 @@ public class CalculateAverage {
                 });
             }
         }
+        return all;
+    }
+
+    private static void displayResult(Map<String, double[]> result) {
         var measurements = new TreeMap<String, ResultRow>();
-        for (var entry : all.entrySet()) {
+        for (var entry : result.entrySet()) {
             var station = entry.getKey();
             var values = entry.getValue();
 
