@@ -19,9 +19,10 @@
 # 2g mem, 4 cores
 
 # Results
-# baseline: 3m02s
-# copy chunk 5k lines, 4 threads: 1m09s
-
+# 1. baseline: 3m02s
+# 2. copy chunk 5k lines, 4 threads: 1m09s
+# 3. 100MB slice, 4 threads, each thread reads from random access file: 59s
+# 4. 3 + better parsing: 24s
 
 JAVA_OPTS="--enable-preview -Xmx2g -Xms2g -XX:+AlwaysPreTouch -XX:ActiveProcessorCount=4"
 # time java $JAVA_OPTS --class-path target/average-1.0.0-SNAPSHOT.jar com.juhanlol.CalculateAverage

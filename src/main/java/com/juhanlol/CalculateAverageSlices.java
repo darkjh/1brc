@@ -36,7 +36,7 @@ public class CalculateAverageSlices {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         var file = new RandomAccessFile(FILE, "r");
-        var sliceSize = 100 * 1000 * 1000; // 100MB
+        var sliceSize = 500 * 1000 * 1000; // 100MB
         var slices = findSlices(file, sliceSize);
         file.close();
 
@@ -168,10 +168,15 @@ public class CalculateAverageSlices {
                     count += 1;
                 }
                 this.buffer.flip();
-                String line = StandardCharsets.UTF_8.decode(this.buffer).toString();
-                var parts = line.split(";");
-                var station = parts[0];
-                var value = Double.parseDouble(parts[1]);
+                var end = this.buffer.limit();
+                var spltIndex = findSemicolon(this.buffer);
+
+                this.buffer.limit(spltIndex);
+                var station = bufferToString(this.buffer);
+
+                this.buffer.limit(end);
+                this.buffer.position(spltIndex + 1);
+                var value = parseTemperature(this.buffer);
 
                 aggr.compute(station, (_, v) -> {
                     if (v == null) {
@@ -187,6 +192,39 @@ public class CalculateAverageSlices {
 
                 this.buffer.clear();
             }
+        }
+
+        private static int findSemicolon(ByteBuffer line) {
+            int i = 0;
+            while (line.get(i) != ';')
+                i++;
+            return i;
+        }
+
+        private static String bufferToString(ByteBuffer line) {
+            byte[] bytes = new byte[line.limit()];
+            line.get(0, bytes);
+            return new String(bytes, StandardCharsets.UTF_8);
+        }
+
+        private static double parseTemperature(ByteBuffer line) {
+            // credit: adapted from spullara's submission
+            int value = 0;
+            int negative = 1;
+            int i = line.position();
+            while (i != line.limit()) {
+                byte b = line.get(i++);
+                switch (b) {
+                    case '-':
+                        negative = -1;
+                    case '.':
+                        break;
+                    default:
+                        value = 10 * value + (b - '0');
+                }
+            }
+            value *= negative;
+            return value / 10.0;
         }
     }
 
