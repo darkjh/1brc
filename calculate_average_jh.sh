@@ -15,10 +15,14 @@
 #  limitations under the License.
 #
 
+# Setup
+# 2g mem, 4 cores
 
+# Results
 # baseline: 3m02s
 # copy chunk 5k lines, 4 threads: 1m09s
 
 
-JAVA_OPTS="--enable-preview -Xmx4g -Xms4g"
-time java $JAVA_OPTS --class-path target/average-1.0.0-SNAPSHOT.jar com.juhanlol.CalculateAverage
+JAVA_OPTS="--enable-preview -Xmx2g -Xms2g -XX:+AlwaysPreTouch -XX:ActiveProcessorCount=4"
+# time java $JAVA_OPTS --class-path target/average-1.0.0-SNAPSHOT.jar com.juhanlol.CalculateAverage
+time java $JAVA_OPTS --class-path target/average-1.0.0-SNAPSHOT.jar com.juhanlol.CalculateAverageSlices
