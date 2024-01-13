@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
+import java.nio.channels.FileChannel;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -147,16 +148,16 @@ public class CalculateAverageSlices {
             var tid = ThreadId.get();
             var aggr = aggrs.get(tid);
             var file = files.get(tid);
-            var rawBytes = new byte[(int) this.slice.size];
 
+            ByteBuffer buffer;
             try {
-                file.seek(this.slice.start);
-                file.read(rawBytes, 0, (int) this.slice.size);
+                buffer = file.getChannel()
+                        .map(FileChannel.MapMode.READ_ONLY, slice.start, slice.size)
+                        .order(ByteOrder.LITTLE_ENDIAN);
             }
             catch (IOException e) {
                 throw new RuntimeException(e);
             }
-            var buffer = ByteBuffer.wrap(rawBytes).order(ByteOrder.LITTLE_ENDIAN);
 
             var start = 0;
             while (start < buffer.capacity()) {
