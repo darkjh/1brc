@@ -135,7 +135,6 @@ public class CalculateAverageSlices {
 
     private static class Task implements Runnable {
         private final Slice slice;
-        private final ByteBuffer buffer;
         private final ArrayList<HashMap<String, double[]>> aggrs;
         private final ArrayList<RandomAccessFile> files;
 
@@ -143,7 +142,6 @@ public class CalculateAverageSlices {
             this.slice = slice;
             this.aggrs = aggrs;
             this.files = files;
-            this.buffer = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN);
         }
 
         @Override
@@ -160,26 +158,32 @@ public class CalculateAverageSlices {
             catch (IOException e) {
                 throw new RuntimeException(e);
             }
+            var buffer = ByteBuffer.wrap(rawBytes).order(ByteOrder.LITTLE_ENDIAN);
 
-            var count = 0;
-            while (count < this.slice.size) {
-                var c = (char) rawBytes[count];
-                count += 1;
-                while (c != '\n') {
-                    this.buffer.put((byte) c);
-                    c = (char) rawBytes[count];
-                    count += 1;
+            var start = 0;
+            while (start < buffer.capacity()) {
+                buffer.limit(buffer.capacity());
+                buffer.position(start);
+
+                // find NEWLINE
+                var end = start;
+                for (int i = start; i < buffer.limit(); i++) {
+                    if (buffer.get(i) == '\n') {
+                        end = i;
+                        break;
+                    }
                 }
-                this.buffer.flip();
-                var end = this.buffer.limit();
-                var spltIndex = findSemicolon(this.buffer);
+                if (end == start) {
+                    // no newline, must be EOF
+                    break;
+                }
 
-                this.buffer.limit(spltIndex);
-                var station = bufferToString(this.buffer);
+                buffer.limit(end);
+                var spltIndex = findSemicolon(buffer, start);
+                var station = bufferToString(buffer, start, spltIndex - start);
 
-                this.buffer.limit(end);
-                this.buffer.position(spltIndex + 1);
-                var value = parseTemperature(this.buffer);
+                buffer.position(spltIndex + 1);
+                var value = parseTemperature(buffer);
 
                 aggr.compute(station, (_, v) -> {
                     if (v == null) {
@@ -193,17 +197,17 @@ public class CalculateAverageSlices {
                     return v;
                 });
 
-                this.buffer.clear();
+                start = end + 1;
             }
         }
 
-        private static int findSemicolon(ByteBuffer line) {
-            return Parse.findIndexOf(line, 0, Parse.DELIMITER);
+        private static int findSemicolon(ByteBuffer buffer, int start) {
+            return Parse.findIndexOf(buffer, start, Parse.DELIMITER);
         }
 
-        private static String bufferToString(ByteBuffer line) {
-            byte[] bytes = new byte[line.limit()];
-            line.get(0, bytes);
+        private static String bufferToString(ByteBuffer buffer, int start, int len) {
+            byte[] bytes = new byte[len];
+            buffer.get(start, bytes);
             return new String(bytes, StandardCharsets.UTF_8);
         }
 
