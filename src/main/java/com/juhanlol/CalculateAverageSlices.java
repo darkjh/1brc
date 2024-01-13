@@ -30,8 +30,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
-// TODO store slice in a byte buffer and parse it continuously
-
 public class CalculateAverageSlices {
 
     private static final String FILE = "./measurements.txt";
@@ -165,18 +163,7 @@ public class CalculateAverageSlices {
                 buffer.limit(buffer.capacity());
                 buffer.position(start);
 
-                // find NEWLINE
-                var end = start;
-                for (int i = start; i < buffer.limit(); i++) {
-                    if (buffer.get(i) == '\n') {
-                        end = i;
-                        break;
-                    }
-                }
-                if (end == start) {
-                    // no newline, must be EOF
-                    break;
-                }
+                var end = Parse.findIndexOf(buffer, start, Parse.NEW_LINE);
 
                 buffer.limit(end);
                 var spltIndex = findSemicolon(buffer, start);
@@ -255,19 +242,6 @@ public class CalculateAverageSlices {
             long tmp = (input & 0x7F7F7F7F7F7F7F7FL) + 0x7F7F7F7F7F7F7F7FL;
             tmp = ~(tmp | input | 0x7F7F7F7F7F7F7F7FL);
             return Long.numberOfTrailingZeros(tmp) >>> 3;
-        }
-
-        private static int findLastNewLine(ByteBuffer buffer) {
-            return findLastNewLine(buffer, buffer.limit() - 1);
-        }
-
-        private static int findLastNewLine(ByteBuffer buffer, int offset) {
-            for (int i = offset; i >= 0; i--) {
-                if (buffer.get(i) == '\n') {
-                    return i;
-                }
-            }
-            return 0;
         }
 
         private static int findIndexOf(ByteBuffer buffer, int offset, long pattern) {
