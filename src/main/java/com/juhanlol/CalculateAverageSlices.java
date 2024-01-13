@@ -18,6 +18,7 @@ package com.juhanlol;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -29,6 +30,8 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 
+// TODO store slice in a byte buffer and parse it continuously
+
 public class CalculateAverageSlices {
 
     private static final String FILE = "./measurements.txt";
@@ -36,7 +39,7 @@ public class CalculateAverageSlices {
 
     public static void main(String[] args) throws IOException, InterruptedException {
         var file = new RandomAccessFile(FILE, "r");
-        var sliceSize = 500 * 1000 * 1000; // 100MB
+        var sliceSize = 100 * 1000 * 1000; // 100MB
         var slices = findSlices(file, sliceSize);
         file.close();
 
@@ -140,7 +143,7 @@ public class CalculateAverageSlices {
             this.slice = slice;
             this.aggrs = aggrs;
             this.files = files;
-            this.buffer = ByteBuffer.allocate(128);
+            this.buffer = ByteBuffer.allocate(128).order(ByteOrder.LITTLE_ENDIAN);
         }
 
         @Override
@@ -195,10 +198,7 @@ public class CalculateAverageSlices {
         }
 
         private static int findSemicolon(ByteBuffer line) {
-            int i = 0;
-            while (line.get(i) != ';')
-                i++;
-            return i;
+            return Parse.findIndexOf(line, 0, Parse.DELIMITER);
         }
 
         private static String bufferToString(ByteBuffer line) {
@@ -225,6 +225,62 @@ public class CalculateAverageSlices {
             }
             value *= negative;
             return value / 10.0;
+        }
+    }
+
+    // from richard startin
+    // only works with byte buffer with little endian order
+    private static final class Parse {
+        private static long compilePattern(long repeat) {
+            return 0x101010101010101L * repeat;
+        }
+
+        private static long compilePattern(char delimiter) {
+            return compilePattern(delimiter & 0xFFL);
+        }
+
+        private static long compilePattern(byte delimiter) {
+            return compilePattern(delimiter & 0xFFL);
+        }
+
+        private static final long NEW_LINE = compilePattern((byte) '\n');
+        private static final long DELIMITER = compilePattern(';');
+
+        private static int firstInstance(long word, long pattern) {
+            long input = word ^ pattern;
+            long tmp = (input & 0x7F7F7F7F7F7F7F7FL) + 0x7F7F7F7F7F7F7F7FL;
+            tmp = ~(tmp | input | 0x7F7F7F7F7F7F7F7FL);
+            return Long.numberOfTrailingZeros(tmp) >>> 3;
+        }
+
+        private static int findLastNewLine(ByteBuffer buffer) {
+            return findLastNewLine(buffer, buffer.limit() - 1);
+        }
+
+        private static int findLastNewLine(ByteBuffer buffer, int offset) {
+            for (int i = offset; i >= 0; i--) {
+                if (buffer.get(i) == '\n') {
+                    return i;
+                }
+            }
+            return 0;
+        }
+
+        private static int findIndexOf(ByteBuffer buffer, int offset, long pattern) {
+            int i = offset;
+            for (; i + Long.BYTES < buffer.limit(); i += Long.BYTES) {
+                int index = firstInstance(buffer.getLong(i), pattern);
+                if (index != Long.BYTES) {
+                    return i + index;
+                }
+            }
+            byte b = (byte) (pattern & 0xFF);
+            for (; i < buffer.limit(); i++) {
+                if (buffer.get(i) == b) {
+                    return i;
+                }
+            }
+            return buffer.limit();
         }
     }
 
