@@ -64,11 +64,11 @@ public class CalculateAverageSlices {
         displayResult(result);
     }
 
-  private record Slice(long start, long end, long size) {
-    Slice(long start, long end) {
-      this(start, end, end - start);
+    private record Slice(long start, long end, long size) {
+        Slice(long start, long end) {
+            this(start, end, end - start);
+        }
     }
-  }
 
     private static List<Slice> findSlices(RandomAccessFile file, long sliceSize) throws IOException {
         var length = file.length();
@@ -201,22 +201,28 @@ public class CalculateAverageSlices {
 
         private static double parseTemperature(ByteBuffer line) {
             // credit: adapted from spullara's submission
-            int value = 0;
+            double value = 0;
             int negative = 1;
+            int digits = -1;
             int i = line.position();
             while (i != line.limit()) {
                 byte b = line.get(i++);
                 switch (b) {
                     case '-':
                         negative = -1;
+                        break;
                     case '.':
+                        digits += 1;
                         break;
                     default:
+                        if (digits >= 0) {
+                            digits += 1;
+                        }
                         value = 10 * value + (b - '0');
                 }
             }
-            value *= negative;
-            return value / 10.0;
+            value = value / Math.pow(10, digits);
+            return value * negative;
         }
     }
 
@@ -263,13 +269,13 @@ public class CalculateAverageSlices {
         }
     }
 
-  private record ResultRow(double min, double mean, double max) {
-    public String toString() {
+    private record ResultRow(double min, double mean, double max) {
+        public String toString() {
       return round(min) + "/" + round(mean) + "/" + round(max);
     }
 
-    private double round(double value) {
+        private double round(double value) {
       return Math.round(value * 10.0) / 10.0;
     }
-  }
+    }
 }
